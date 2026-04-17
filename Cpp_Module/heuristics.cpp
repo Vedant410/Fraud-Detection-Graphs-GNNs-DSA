@@ -1,29 +1,37 @@
-#include "heuristics.h"
+#include "heuristics.hpp"
+#include <algorithm>
 
-Heuristics::Heuristics(Graph &graph, vector<int> &labels)
-    : g(graph), fraud(labels) {}
-
-int Heuristics::degree(int node) {
-    return g.adj[node].size();
+// Normalize helper
+double normalize(double val, double min_val, double max_val) {
+    if (max_val - min_val == 0) return 0;
+    return (val - min_val) / (max_val - min_val);
 }
 
-int Heuristics::suspiciousNeighbors(int node) {
-    int count = 0;
-    for (int nb : g.adj[node]) {
-        if (fraud[nb] == 1) count++;
+void computeHeuristicScores(unordered_map<int, Features> &fmap) {
+    double max_deg = 0, max_pr = 0, max_cluster = 0, max_freq = 0;
+
+    // Find max values for normalization
+    for (auto &[node, f] : fmap) {
+        max_deg = max(max_deg, f.degree);
+        max_pr = max(max_pr, f.pagerank);
+        max_cluster = max(max_cluster, f.clustering);
+        max_freq = max(max_freq, f.txn_freq);
     }
-    return count;
-}
 
-double Heuristics::transactionVelocity(int node) {
-    // simple assumption: more connections = higher velocity
-    return g.adj[node].size() * 0.5;
-}
+    // Compute heuristic score
+    for (auto &[node, f] : fmap) {
+        double deg_norm = normalize(f.degree, 0, max_deg);
+        double pr_norm = normalize(f.pagerank, 0, max_pr);
+        double cluster_norm = normalize(f.clustering, 0, max_cluster);
+        double freq_norm = normalize(f.txn_freq, 0, max_freq);
 
-double Heuristics::riskScore(int node) {
-    double score = 0;
-    score += 0.4 * degree(node);
-    score += 0.4 * suspiciousNeighbors(node);
-    score += 0.2 * transactionVelocity(node);
-    return score;
+        // Weighted scoring (tune these weights later)
+        double score =
+            0.30 * deg_norm +
+            0.25 * pr_norm +
+            0.25 * cluster_norm +
+            0.20 * freq_norm;
+
+        f.heuristic_score = score;
+    }
 }
